@@ -3,7 +3,9 @@ Paths manager.
 
 """
 
+from collections import deque
 from math import copysign, hypot, pi, radians
+from re import finditer
 
 from .bounding_box import calculate_bounding_box
 from .helpers import (
@@ -31,8 +33,8 @@ def draw_markers(surface, node):
 
     while node.vertices:
         # Calculate position and angle
-        point = node.vertices.pop(0)
-        angles = node.vertices.pop(0) if node.vertices else None
+        point = node.vertices.popleft()
+        angles = node.vertices.popleft() if node.vertices else None
         if angles:
             if position == 'start':
                 angle = pi - angles[0]
@@ -122,7 +124,7 @@ def path(surface, node):
     """Draw a path ``node``."""
     string = node.get('d', '')
 
-    node.vertices = []
+    node.vertices = deque()
 
     for letter in PATH_LETTERS:
         string = string.replace(letter, f' {letter} ')
@@ -138,17 +140,15 @@ def path(surface, node):
         surface.context.move_to(0, 0)
         current_point = 0, 0
 
-    while string:
+    matches = deque(match.groups() for match in finditer(
+        f'([{PATH_LETTERS}])([^{PATH_LETTERS}]*)', string.strip()))
+    while matches:
+        letter, string = matches.popleft()
         string = string.strip()
-        if string.split(' ', 1)[0] in PATH_LETTERS:
-            letter, string = (string + ' ').split(' ', 1)
-            if last_letter in (None, 'z', 'Z') and letter not in 'mM':
-                node.vertices.append(current_point)
-                first_path_point = current_point
-        elif letter == 'M':
-            letter = 'L'
-        elif letter == 'm':
-            letter = 'l'
+
+        if last_letter in (None, 'z', 'Z') and letter not in 'mM':
+            node.vertices.append(current_point)
+            first_path_point = current_point
 
         if last_letter in (None, 'm', 'M', 'z', 'Z'):
             first_path_point = None
@@ -186,14 +186,12 @@ def path(surface, node):
 
             # rx=0 or ry=0 means straight line
             if not rx or not ry:
-                if string and string[0] not in PATH_LETTERS:
+                if string := string.strip():
                     # As we replace the current operation by l, we must be sure
                     # that the next letter is set to the real current letter (a
                     # or A) in case it’s omitted
-                    next_letter = f'{letter} '
-                else:
-                    next_letter = ''
-                string = f'l {x3} {y3} {next_letter}{string}'
+                    matches.appendleft((letter, string))
+                matches.appendleft(('l', f'{x3} {y3}'))
                 continue
 
             radii_ratio = ry / rx
@@ -448,5 +446,7 @@ def path(surface, node):
         if letter not in 'zZ':
             node.vertices.append(current_point)
 
-        string = string.strip()
+        if string := string.strip():
+            next_letter = {'m': 'l', 'M': 'L'}.get(letter, letter)
+            matches.appendleft((next_letter, string))
         last_letter = letter

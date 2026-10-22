@@ -69,7 +69,9 @@ def nt_compatible_path(path):
     """
     if os.name == 'nt' and re.match(
             '^/[a-z]:/', path, re.IGNORECASE | re.MULTILINE | re.DOTALL):
-        return re.sub('^/', '', path, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+        return re.sub(
+            '^/', '', path, count=1,
+            flags=re.IGNORECASE | re.MULTILINE | re.DOTALL)
     else:
         return path
 
@@ -102,6 +104,8 @@ def parse_url(url, base=None):
     the "folder" part of it is prepended to the URL.
 
     """
+    if isinstance(url, os.PathLike):
+        url = os.fspath(url)
     if url:
         match = URL.search(url)
         if match:

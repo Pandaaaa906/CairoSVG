@@ -3,6 +3,7 @@ Shapes drawers.
 
 """
 
+from collections import deque
 from math import pi
 
 from .helpers import normalize, point, point_angle, size
@@ -47,7 +48,7 @@ def line(surface, node):
     surface.context.move_to(x1, y1)
     surface.context.line_to(x2, y2)
     angle = point_angle(x1, y1, x2, y2)
-    node.vertices = [(x1, y1), (pi - angle, angle), (x2, y2)]
+    node.vertices = deque([(x1, y1), (pi - angle, angle), (x2, y2)])
 
 
 def polygon(surface, node):
@@ -62,7 +63,7 @@ def polyline(surface, node):
     if points:
         x, y, points = point(surface, points)
         surface.context.move_to(x, y)
-        node.vertices = [(x, y)]
+        node.vertices = deque([(x, y)])
         while points:
             x_old, y_old = x, y
             x, y, points = point(surface, points)

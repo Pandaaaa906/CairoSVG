@@ -105,7 +105,7 @@ class Surface(object):
 
         :param bytestring: The SVG source as a byte-string.
         :param file_obj: A file-like object.
-        :param url: A filename.
+        :param url: A filename, given as a string or a path-like object.
 
         Give some options:
 
@@ -116,6 +116,10 @@ class Surface(object):
         :param unsafe: A boolean allowing external file access, XML entities
                        and very large files
                        (WARNING: vulnerable to XXE attacks and various DoS).
+                       This does NOT restrict fetching of the main SVG input
+                       specified via the ``url`` parameter.
+                       Applications should validate input URLs to prevent SSRF.
+
 
         Specifiy the output with:
 
@@ -159,6 +163,7 @@ class Surface(object):
         self.cursor_d_position = [0, 0]
         self.text_path_width = 0
         self.tree_cache = {(tree.url, tree.get('id')): tree}
+        self.reference_count = 0
         if parent_surface:
             self.markers = parent_surface.markers
             self.gradients = parent_surface.gradients
@@ -521,8 +526,8 @@ class PNGSurface(Surface):
 
     def _create_surface(self, width, height):
         """Create and return ``(cairo_surface, width, height)``."""
-        width = int(width)
-        height = int(height)
+        width = int(round(width))
+        height = int(round(height))
         cairo_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
         return cairo_surface, width, height
 

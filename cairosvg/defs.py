@@ -29,12 +29,15 @@ EXTEND_OPERATORS = {
 }
 
 
-def update_def_href(surface, def_name, def_dict):
+def update_def_href(surface, def_name, def_dict, chain=None):
     """Update the attributes of the def according to its href attribute."""
     def_node = def_dict[def_name]
     href = parse_url(def_node.get_href()).fragment
-    if href in def_dict:
-        update_def_href(surface, href, def_dict)
+    if chain is None:
+        chain = set()
+    if href in def_dict and href not in chain:
+        chain.add(href)
+        update_def_href(surface, href, def_dict, chain)
         href_node = def_dict[href]
         def_dict[def_name] = Tree(
             url=f'#{def_name}', url_fetcher=def_node.url_fetcher,
@@ -331,6 +334,10 @@ def apply_filter_after_painting(surface, node, name):
 
 def use(surface, node):
     """Draw the content of another SVG node."""
+    surface.reference_count += 1
+    if not node.unsafe and surface.reference_count > 100_000:
+        raise ValueError(
+            'Abort rendering: more than 100 000 referenced elements')
     surface.context.save()
     surface.context.translate(
         size(surface, node.get('x'), 'x'), size(surface, node.get('y'), 'y'))
