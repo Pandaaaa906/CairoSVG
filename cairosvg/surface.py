@@ -429,8 +429,10 @@ class Surface(object):
             box = node.get('text_bounding_box')
             if is_valid_bounding_box(box):
                 minx, miny, box_width, box_height = box
-                x_attr = normalize(node.get('x', '')).strip().split(' ')
-                anchor_x = size(self, x_attr[0] or 0, 'x')
+                # The anchor point is the first chunk's x, which may live
+                # on a child tspan when the text element itself has no x.
+                anchor = normalize(node.get('x', '')).strip().split(' ')[0]
+                anchor_x = size(self, anchor or minx, 'x')
                 if text_anchor == 'middle':
                     shift = anchor_x - (minx + box_width / 2)
                 else:
