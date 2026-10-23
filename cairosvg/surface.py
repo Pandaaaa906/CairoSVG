@@ -8,6 +8,8 @@ import io
 
 import cairocffi as cairo
 
+from .bounding_box import (
+    EMPTY_BOUNDING_BOX, extend_bounding_box, is_valid_bounding_box)
 from .colors import color, negate_color
 from .defs import (
     apply_filter_after_painting, apply_filter_before_painting, clip_path,
@@ -162,6 +164,7 @@ class Surface(object):
         self.cursor_position = [0, 0]
         self.cursor_d_position = [0, 0]
         self.text_path_width = 0
+        self._text_measure = False
         self.tree_cache = {(tree.url, tree.get('id')): tree}
         self.reference_count = 0
         if parent_surface:
@@ -403,6 +406,37 @@ class Surface(object):
             (self.cursor_position, self.cursor_d_position,
              self.text_path_width))
 
+        # Handle text anchor: measure the whole text element's width with a
+        # throwaway draw onto an unbounded recording surface, then let the
+        # real draw below happen on a context translated by the anchoring
+        # shift. Recording into a cairo group instead would lose glyphs whose
+        # pre-shift position falls outside a raster target's bounds.
+        # ponytail: nested <text> with anchor is measured with the inner one
+        # unshifted (WeasyPrint@1460522 double-shifts instead; both wrong).
+        # Fix when a real case shows up.
+        text_anchor = node.get('text-anchor') if node.tag == 'text' else None
+        if text_anchor in ('middle', 'end') and not self._text_measure:
+            self._text_measure = True
+            real_context = self.context
+            self.context = cairo.Context(cairo.RecordingSurface(
+                cairo.CONTENT_COLOR_ALPHA, None))
+            self.context.set_matrix(real_context.get_matrix())
+            self.draw(node)
+            (self.cursor_position, self.cursor_d_position,
+             self.text_path_width) = copy.deepcopy(save_cursor)
+            self.context = real_context
+            self._text_measure = False
+            box = node.get('text_bounding_box')
+            if is_valid_bounding_box(box):
+                minx, miny, box_width, box_height = box
+                x_attr = normalize(node.get('x', '')).strip().split(' ')
+                anchor_x = size(self, x_attr[0] or 0, 'x')
+                if text_anchor == 'middle':
+                    shift = anchor_x - (minx + box_width / 2)
+                else:
+                    shift = anchor_x - (minx + box_width)
+                self.context.translate(shift, 0)
+
         # Only draw known tags
         if node.tag in TAGS:
             try:
@@ -475,6 +509,15 @@ class Surface(object):
         if display and node.tag not in INVISIBLE_TAGS:
             for child in node.children:
                 self.draw(child)
+                # Accumulate text bounding boxes up to text elements
+                if node.tag in ('text', 'tspan', 'textPath'):
+                    child_box = child.get('text_bounding_box')
+                    if not is_valid_bounding_box(child_box):
+                        continue
+                    x, y, width, height = child_box
+                    node['text_bounding_box'] = extend_bounding_box(
+                        node.get('text_bounding_box', EMPTY_BOUNDING_BOX),
+                        ((x, y), (x + width, y + height)))
 
         # Apply filter, mask and opacity
         if filter_ or mask or (opacity < 1 and node.children):

@@ -74,7 +74,7 @@ def text(surface, node, draw_as_text=False):
     else:
         text_path = None
     letter_spacing = size(surface, node.get('letter-spacing'))
-    x_bearing, y_bearing, width, height = (
+    x_bearing, y_bearing, _, height = (
         surface.context.text_extents(node.text)[:4])
 
     x, y, dx, dy, rotate = [], [], [], [], [0]
@@ -96,18 +96,10 @@ def text(surface, node, draw_as_text=False):
     last_r = rotate[-1]
     letters_positions = zip_letters(x, y, dx, dy, rotate, node.text)
 
+    # Text anchor is handled in Surface.draw by translating the whole text
+    # element; individual chunks are always drawn start-anchored.
     x_align = 0
     y_align = 0
-
-    text_anchor = node.get('text-anchor')
-    if text_anchor == 'middle':
-        x_align = - (width / 2 + x_bearing)
-        if letter_spacing and node.text:
-            x_align -= (len(node.text) - 1) * letter_spacing / 2
-    elif text_anchor == 'end':
-        x_align = - (width + x_bearing)
-        if letter_spacing and node.text:
-            x_align -= (len(node.text) - 1) * letter_spacing
 
     # TODO: This is a hack. The rest of the baseline alignment tags of the SVG
     # 1.1 spec (section 10.9.2) are not supported. We only try to align things
@@ -201,11 +193,11 @@ def text(surface, node, draw_as_text=False):
                 surface.context.rel_move_to(x_align, y_align)
                 surface.context.rotate(last_r if r is None else r)
                 points = (
-                    (cursor_position[0] + x_align +
+                    (x + x_align +
                      surface.cursor_d_position[0],
                      cursor_position[1] + y_align +
                      surface.cursor_d_position[1]),
-                    (cursor_position[0] + x_align + text_extents[4] +
+                    (cursor_position[0] + x_align +
                      surface.cursor_d_position[0],
                      cursor_position[1] + y_align + text_extents[3] +
                      surface.cursor_d_position[1]))
